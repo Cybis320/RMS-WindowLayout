@@ -1,0 +1,4 @@
+# Generated / runtime artifacts (created on the station, not tracked)
+rms_stations.lua
+watcher.log
+*.lock

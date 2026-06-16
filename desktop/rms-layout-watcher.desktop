@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=RMS Layout Watcher
+Type=Application
+Exec=bash -c "exec \"$HOME/.config/devilspie2/rms-layout-watcher.sh\""
+Hidden=false
+NoDisplay=false
+Icon=preferences-system-windows
+Comment=Re-applies the RMS window layout when stations (re)start
+X-GNOME-Autostart-Delay=5

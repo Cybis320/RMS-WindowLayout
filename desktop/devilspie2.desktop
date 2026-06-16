@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Devilspie2
+Type=Application
+Exec=devilspie2
+Hidden=false
+NoDisplay=false
+Icon=preferences-system-windows
+Comment=Window placement rules for RMS stations

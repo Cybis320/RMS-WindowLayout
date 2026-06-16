@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Realign Windows
+Comment=Regenerate window layout and restart devilspie2
+Type=Application
+Exec=bash -c "$HOME/.config/devilspie2/realign_windows.sh; sleep 2"
+Icon=preferences-system-windows
+Terminal=true
+Categories=Utility;
