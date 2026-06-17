@@ -52,7 +52,28 @@ This covers every restart path uniformly:
 | **Manual relaunch of a station** | Same — the new window is detected and the layout re-applied. |
 | **Manual, on demand**            | Double-click the **Realign Windows** desktop shortcut. |
 
-No modification to RMS or `GRMSUpdater.sh` is required.
+The realign trigger needs **no changes to RMS** — the watcher reacts purely to
+windows appearing.
+
+### Recommended: tell GRMSUpdater which terminal profile to use
+
+The watcher fixes window *position and size*, but on the `GRMSUpdater.sh`
+restart path the terminals still inherit gnome-terminal's *default* profile
+unless told otherwise (the login autostart entries pass `--profile=StartCapture`,
+but GRMSUpdater historically did not). That means GRMSUpdater-restarted windows
+can come up with the wrong font/colors/column-fit.
+
+If your RMS includes the GRMSUpdater `--profile` flag, add it to the capture
+user's cron so restarts match the login look:
+
+```cron
+0 2 * * * /home/<user>/source/RMS/Scripts/MultiCamLinux/GRMSUpdater.sh \
+          --term gnome-terminal --profile StartCapture --force
+```
+
+It's safe to pass everywhere: gnome-terminal warns and falls back to its default
+if the `StartCapture` profile is missing, and other terminals (`lxterminal`,
+`kitty`, `foot`, `tmux`) ignore it.
 
 ## What gets installed
 
