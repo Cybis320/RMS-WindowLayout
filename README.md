@@ -17,20 +17,31 @@ It combines three pieces:
 
 ## Quick start
 
+One line — clones (or updates) the repo into `~/source/RMS-WindowLayout` and runs the installer:
+
 ```bash
-git clone <this-repo> RMS-WindowLayout
+curl -fsSL https://raw.githubusercontent.com/Cybis320/RMS-WindowLayout/master/bootstrap.sh | bash
+```
+
+That's it. The installer pulls dependencies, imports the terminal profile, lays
+out the windows, and arms everything to run on login. Re-running it (just run the
+same line again) is safe and refreshes the install.
+
+Or clone and run it manually:
+
+```bash
+git clone https://github.com/Cybis320/RMS-WindowLayout.git
 cd RMS-WindowLayout
 ./install.sh
 ```
 
-That's it. The installer pulls dependencies, imports the terminal profile, lays
-out the windows, and arms everything to run on login. Re-running `install.sh`
-is safe and just refreshes the install.
-
-Optional tuning of terminal width (column count and pixel-per-char):
+Optional tuning of terminal width (column count and pixel-per-char), forwarded
+to `install.sh`:
 
 ```bash
-./install.sh 229 6      # chars_wide font_pixel_width  (these are the defaults)
+./install.sh 229 6                                    # local clone
+curl -fsSL .../bootstrap.sh | bash -s -- 229 6        # via one-liner
+# 229 = chars_wide, 6 = font_pixel_width (these are the defaults)
 ```
 
 ## How auto-realign works
