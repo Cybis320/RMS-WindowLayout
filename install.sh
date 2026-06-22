@@ -50,28 +50,53 @@ mkdir -p "$CONFIG_DIR" "$AUTOSTART_DIR"
 # ---------------------------------------------------------------------------
 # 2. Import the gnome-terminal "StartCapture" profile
 # ---------------------------------------------------------------------------
-import_profile() {
-    if ! command -v dconf >/dev/null 2>&1; then
-        echo "  dconf not available — skipping terminal profile import" >&2
-        return
+# Portable UUID: /proc is always present on Linux; uuidgen (uuid-runtime) is not.
+gen_uuid() {
+    if [ -r /proc/sys/kernel/random/uuid ]; then
+        cat /proc/sys/kernel/random/uuid
+    elif command -v uuidgen >/dev/null 2>&1; then
+        uuidgen
+    else
+        echo ""   # signal failure to caller
     fi
+}
 
-    # Already have a profile named "$PROFILE_NAME"?
-    local uuid name existing=""
+# Find the UUID of an existing profile whose visible-name is $PROFILE_NAME (if any).
+find_profile_uuid() {
+    local uuid name
     while read -r uuid; do
         [ -z "$uuid" ] && continue
         name="$(dconf read "$PROFILES_PATH/:$uuid/visible-name" 2>/dev/null || true)"
-        if [ "$name" = "'$PROFILE_NAME'" ]; then existing="$uuid"; break; fi
+        if [ "$name" = "'$PROFILE_NAME'" ]; then echo "$uuid"; return 0; fi
     done < <(dconf list "$PROFILES_PATH/" 2>/dev/null | sed -n 's#^:\(.*\)/$#\1#p')
+    return 1
+}
 
-    if [ -n "$existing" ]; then
+import_profile() {
+    if ! command -v dconf >/dev/null 2>&1; then
+        echo "  WARNING: dconf not available — terminal profile NOT imported." >&2
+        return
+    fi
+    if ! command -v gnome-terminal >/dev/null 2>&1; then
+        echo "  Note: gnome-terminal not installed — importing the profile anyway." >&2
+    fi
+
+    # Already have a profile named "$PROFILE_NAME"? Just refresh its settings.
+    local existing
+    if existing="$(find_profile_uuid)"; then
         echo "  Terminal profile '$PROFILE_NAME' already exists (refreshing settings)."
         dconf load "$PROFILES_PATH/:$existing/" < "$REPO_DIR/profiles/StartCapture.dconf"
         return
     fi
 
     local new
-    new="$(uuidgen)"
+    new="$(gen_uuid)"
+    if [ -z "$new" ]; then
+        echo "  ERROR: could not generate a UUID (no /proc/sys/kernel/random/uuid or uuidgen)." >&2
+        echo "         Profile NOT imported. Install 'uuid-runtime' and re-run." >&2
+        return
+    fi
+
     dconf load "$PROFILES_PATH/:$new/" < "$REPO_DIR/profiles/StartCapture.dconf"
 
     local list
@@ -82,7 +107,15 @@ import_profile() {
         # turn  ['a', 'b']  into  ['a', 'b', 'NEW']
         dconf write "$PROFILES_PATH/list" "${list%]*}, '$new']"
     fi
-    echo "  Created terminal profile '$PROFILE_NAME' ($new)."
+
+    # Verify it actually landed in the profile list (the part that makes it
+    # visible in Preferences and resolvable via --profile=StartCapture).
+    if find_profile_uuid >/dev/null && dconf read "$PROFILES_PATH/list" | grep -q "$new"; then
+        echo "  Created terminal profile '$PROFILE_NAME' ($new)."
+    else
+        echo "  ERROR: profile import did not take — '$PROFILE_NAME' is not in the profile list." >&2
+        echo "         Check: dconf read $PROFILES_PATH/list" >&2
+    fi
 }
 echo "Importing terminal profile..."
 import_profile
