@@ -72,6 +72,15 @@ find_profile_uuid() {
     return 1
 }
 
+UUID_RE='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+
+# Render a dconf string array from UUID args:  a b c  ->  ['a', 'b', 'c']
+render_list() {
+    local out="" u
+    for u in "$@"; do out="$out, '$u'"; done
+    printf '[%s]' "${out#, }"
+}
+
 import_profile() {
     if ! command -v dconf >/dev/null 2>&1; then
         echo "  WARNING: dconf not available — terminal profile NOT imported." >&2
@@ -81,40 +90,66 @@ import_profile() {
         echo "  Note: gnome-terminal not installed — importing the profile anyway." >&2
     fi
 
-    # Already have a profile named "$PROFILE_NAME"? Just refresh its settings.
+    # UUIDs already in the profile list (empty on a machine where gnome-terminal
+    # has never been configured).
     local existing
-    if existing="$(find_profile_uuid)"; then
-        echo "  Terminal profile '$PROFILE_NAME' already exists (refreshing settings)."
-        dconf load "$PROFILES_PATH/:$existing/" < "$REPO_DIR/profiles/StartCapture.dconf"
-        return
-    fi
+    existing="$(dconf read "$PROFILES_PATH/list" 2>/dev/null | grep -oE "$UUID_RE" || true)"
 
-    local new
-    new="$(gen_uuid)"
-    if [ -z "$new" ]; then
-        echo "  ERROR: could not generate a UUID (no /proc/sys/kernel/random/uuid or uuidgen)." >&2
-        echo "         Profile NOT imported. Install 'uuid-runtime' and re-run." >&2
-        return
-    fi
-
-    dconf load "$PROFILES_PATH/:$new/" < "$REPO_DIR/profiles/StartCapture.dconf"
-
-    local list
-    list="$(dconf read "$PROFILES_PATH/list" 2>/dev/null || true)"
-    if [ -z "$list" ] || [ "$list" = "@as []" ]; then
-        dconf write "$PROFILES_PATH/list" "['$new']"
+    # Ensure the StartCapture profile exists (create new, or refresh in place).
+    local sc
+    sc="$(find_profile_uuid || true)"
+    if [ -z "$sc" ]; then
+        sc="$(gen_uuid)"
+        if [ -z "$sc" ]; then
+            echo "  ERROR: could not generate a UUID — profile NOT imported." >&2
+            echo "         Install 'uuid-runtime' and re-run." >&2
+            return
+        fi
+        echo "  Creating terminal profile '$PROFILE_NAME' ($sc)."
     else
-        # turn  ['a', 'b']  into  ['a', 'b', 'NEW']
-        dconf write "$PROFILES_PATH/list" "${list%]*}, '$new']"
+        echo "  Terminal profile '$PROFILE_NAME' already exists ($sc) — refreshing settings."
+    fi
+    dconf load "$PROFILES_PATH/:$sc/" < "$REPO_DIR/profiles/StartCapture.dconf"
+
+    # StartCapture must NEVER be the default profile — that would force every
+    # manually-opened terminal to 210x24. Find (or create) a separate default.
+    local cur_default def="" u
+    cur_default="$(dconf read "$PROFILES_PATH/default" 2>/dev/null | tr -d "\"'" || true)"
+    if [ -n "$cur_default" ] && [ "$cur_default" != "$sc" ]; then
+        def="$cur_default"                       # keep the existing default
+    else
+        for u in $existing; do                   # reuse any other existing profile
+            [ "$u" != "$sc" ] && { def="$u"; break; }
+        done
+    fi
+    if [ -z "$def" ]; then                        # none available — make a stock one
+        def="$(gen_uuid)"
+        dconf write "$PROFILES_PATH/:$def/visible-name" "'Default'"
+        echo "  Created a stock 'Default' profile ($def) so StartCapture isn't the default."
     fi
 
-    # Verify it actually landed in the profile list (the part that makes it
-    # visible in Preferences and resolvable via --profile=StartCapture).
-    if find_profile_uuid >/dev/null && dconf read "$PROFILES_PATH/list" | grep -q "$new"; then
-        echo "  Created terminal profile '$PROFILE_NAME' ($new)."
+    # Rebuild the list: default first, then other existing profiles, then
+    # StartCapture — deduplicated.
+    local -a order=()
+    _add_uuid() { local x; for x in ${order[@]+"${order[@]}"}; do [ "$x" = "$1" ] && return; done; order+=("$1"); }
+    _add_uuid "$def"
+    for u in $existing; do _add_uuid "$u"; done
+    _add_uuid "$sc"
+    dconf write "$PROFILES_PATH/list" "$(render_list "${order[@]}")"
+
+    # Point the default at the non-StartCapture profile if it's unset or, from a
+    # prior broken install, currently pointing at StartCapture.
+    if [ -z "$cur_default" ] || [ "$cur_default" = "$sc" ]; then
+        dconf write "$PROFILES_PATH/default" "'$def'"
+    fi
+
+    # Verify: StartCapture is in the list AND is not the default.
+    if dconf read "$PROFILES_PATH/list" | grep -q "$sc" \
+       && [ "$(dconf read "$PROFILES_PATH/default" | tr -d "\"'")" != "$sc" ]; then
+        echo "  Profile '$PROFILE_NAME' installed as a separate (non-default) profile."
     else
-        echo "  ERROR: profile import did not take — '$PROFILE_NAME' is not in the profile list." >&2
-        echo "         Check: dconf read $PROFILES_PATH/list" >&2
+        echo "  ERROR: profile import did not take correctly." >&2
+        echo "         Check: dconf read $PROFILES_PATH/list ; dconf read $PROFILES_PATH/default" >&2
     fi
 }
 echo "Importing terminal profile..."
