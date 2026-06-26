@@ -54,6 +54,15 @@ stations coming up at once coalesce into a single realign — then runs
 `realign_windows.sh`, which regenerates the layout and re-applies devilspie2
 twice (the second pass beats the window manager fighting placement).
 
+Because an RMS station sets its window *title* early but then resizes/moves its
+own window a few seconds later — after both passes have already landed — the
+watcher also fires one **delayed follow-up** realign `RMS_LAYOUT_RESETTLE`
+seconds later (default 10) to re-apply once the windows have finished their own
+late initialization. (devilspie2 only reacts to window create/name events, not a
+window quietly moving itself, so without this the late self-move would stick.)
+Overlapping realigns simply re-apply the same generated layout, so they are
+idempotent and need no serialization.
+
 This covers every restart path uniformly:
 
 | Trigger                          | What happens |
@@ -118,7 +127,8 @@ The watcher logs to `~/.config/devilspie2/watcher.log`.
   *Realign Windows* (or just re-run `./install.sh`).
 - **Watcher timing**: override env vars in
   `~/.config/autostart/rms-layout-watcher.desktop`:
-  `RMS_LAYOUT_POLL`, `RMS_LAYOUT_DEBOUNCE`, `RMS_LAYOUT_STARTUP`.
+  `RMS_LAYOUT_POLL`, `RMS_LAYOUT_DEBOUNCE`, `RMS_LAYOUT_STARTUP`,
+  `RMS_LAYOUT_RESETTLE`.
 - **Layout math** (gaps, top-bar height, utility column): edit
   `generate_layout.sh`.
 

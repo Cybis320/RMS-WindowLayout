@@ -15,6 +15,9 @@
 #   RMS_LAYOUT_POLL      seconds between window-list polls            (default 3)
 #   RMS_LAYOUT_DEBOUNCE  quiet seconds after the last new window      (default 6)
 #   RMS_LAYOUT_STARTUP   delay before the initial apply at login      (default 12)
+#   RMS_LAYOUT_RESETTLE  delay before a follow-up realign that catches
+#                        windows which reposition themselves *after*
+#                        finishing their own init (0 disables)        (default 10)
 
 set -u
 
@@ -27,6 +30,7 @@ LOCK="$CONFIG_DIR/.watcher.lock"
 POLL=${RMS_LAYOUT_POLL:-3}
 DEBOUNCE=${RMS_LAYOUT_DEBOUNCE:-6}
 STARTUP=${RMS_LAYOUT_STARTUP:-12}
+RESETTLE=${RMS_LAYOUT_RESETTLE:-10}
 
 # --- single instance ------------------------------------------------------
 exec 9>"$LOCK"
@@ -36,6 +40,31 @@ if ! flock -n 9; then
 fi
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+
+# Run realign now, then once more after RESETTLE seconds. realign_windows.sh
+# already applies the layout twice in quick succession (~2s apart) to fight the
+# WM during placement. That is enough when windows are settled (manual runs),
+# but at startup an RMS station sets its title early and then resizes/moves its
+# *own* window a few seconds later — after both passes have already landed —
+# leaving it mispositioned with nothing to re-apply (devilspie2 only reacts to
+# window create/name events, not self-moves). The delayed follow-up re-applies
+# once the windows have finished their own late init. Runs in the background so
+# the watcher's poll loop keeps reacting to further window changes meanwhile.
+#
+# 9>&- closes our single-instance lock fd in realign and, crucially, in the
+# long-lived devilspie2 daemon it spawns. Without this the daemon inherits fd 9
+# and keeps the lock held for its whole life, so a future watcher restart sees
+# the lock as taken and refuses to start. Overlapping realigns just re-apply the
+# same generated layout, so they're idempotent and need no serialization.
+do_realign() { "$REALIGN" >/dev/null 2>&1 9>&-; }
+
+realign_resettle() {
+    do_realign
+    if [ "$RESETTLE" -gt 0 ]; then
+        ( sleep "$RESETTLE"; do_realign ) &
+        disown
+    fi
+}
 
 # Trim the log so it can't grow without bound across reboots.
 if [ -f "$LOG" ] && [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -gt 2000 ]; then
@@ -74,7 +103,7 @@ current_relevant() {
 # --- initial apply at login ----------------------------------------------
 sleep "$STARTUP"
 log "initial realign"
-"$REALIGN" >/dev/null 2>&1
+realign_resettle
 prev="$(current_relevant)"
 log "initial station windows: $(echo $prev)"
 
@@ -98,7 +127,7 @@ while sleep "$POLL"; do
         pending=$(( pending - POLL ))
         if [ "$pending" -le 0 ]; then
             log "realigning after settle"
-            "$REALIGN" >/dev/null 2>&1
+            realign_resettle
             pending=0
             prev="$(current_relevant)"
         fi
