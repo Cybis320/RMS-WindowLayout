@@ -30,7 +30,11 @@ UTILITIES=()
 
 for f in "$AUTOSTART_DIR"/*.desktop; do
     [ -f "$f" ] || continue
-    TITLE=$(grep -oP '(?<=--title[= ])\S+' "$f" | head -1)
+    # Title may be bare (--title=Foo, --title Foo) or quoted with spaces
+    # (--title "Foo Bar"); strip the surrounding quotes if present.
+    TITLE=$(grep -oP "(?<=--title[= ])(\"[^\"]+\"|'[^']+'|\\S+)" "$f" | head -1)
+    TITLE="${TITLE%[\"\']}"
+    TITLE="${TITLE#[\"\']}"
     [ -z "$TITLE" ] && continue
 
     if grep -q 'StartCapture' "$f"; then
