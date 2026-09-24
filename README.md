@@ -17,21 +17,29 @@ It combines three pieces:
 
 ## Quick start
 
-One line — clones (or updates) the repo into `~/source/RMS-WindowLayout` and runs the installer:
+One line — clones (or updates) the repo into `~/source/CC_Utils/window_layout` and runs the installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cybis320/RMS-WindowLayout/master/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Cybis320/RMS-WindowLayout/master/install.sh | bash
 ```
 
 That's it. The installer pulls dependencies, imports the terminal profile, lays
 out the windows, and arms everything to run on login. Re-running it (just run the
-same line again) is safe and refreshes the install.
+same line again) is safe and refreshes the install. An existing
+`~/source/RMS-WindowLayout` clone is moved into `CC_Utils`, and the old
+`bootstrap.sh` one-liner still works.
+
+Updates install themselves: the shared hourly [cc-utils](cc-utils/README.md)
+updater refreshes the scripts in `~/.config/devilspie2` and the launchers. It
+skips any file you have edited in place (re-run `install.sh` to replace those)
+and never regenerates your layout. A running watcher picks up new code at the
+next login.
 
 Or clone and run it manually:
 
 ```bash
-git clone https://github.com/Cybis320/RMS-WindowLayout.git
-cd RMS-WindowLayout
+git clone https://github.com/Cybis320/RMS-WindowLayout.git ~/source/CC_Utils/window_layout
+cd ~/source/CC_Utils/window_layout
 ./install.sh
 ```
 
@@ -40,7 +48,7 @@ to `install.sh`:
 
 ```bash
 ./install.sh 229 6                                    # local clone
-curl -fsSL .../bootstrap.sh | bash -s -- 229 6        # via one-liner
+curl -fsSL .../install.sh | bash -s -- 229 6          # via one-liner
 # 229 = chars_wide, 6 = font_pixel_width (these are the defaults)
 ```
 
@@ -106,6 +114,7 @@ if the `StartCapture` profile is missing, and other terminals (`lxterminal`,
 | `~/.config/autostart/devilspie2.desktop`      | Starts the devilspie2 daemon on login. |
 | `~/.config/autostart/rms-layout-watcher.desktop` | Starts the watcher on login. |
 | `~/Desktop/RealignWindows.desktop`            | Manual "Realign Windows" shortcut. |
+| crontab line `# cc-utils-update`              | Hourly auto-update (shared by all CC utilities). |
 | gnome-terminal profile `StartCapture`         | Fixed window size/font for capture terminals. |
 
 The watcher logs to `~/.config/devilspie2/watcher.log`.
